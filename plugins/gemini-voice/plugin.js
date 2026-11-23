@@ -8,7 +8,7 @@ export const meta = {
   apiVersion: 1,
   key: "gemini-voice",
   name: "Gemini 录音复刻",
-  version: "1.0.4",
+  version: "1.0.5",
   author: { name: "Plugin Maintainers" },
   baseUrl: baseURL,
   auth: "api_key",
@@ -64,6 +64,19 @@ export const native = {
     return { kind: "submit", model, action: "synthesize", requestBody: body };
   },
   transcribe(ctx) {
+    if (ctx.body.kind === "json") {
+      const { audio_base64: audioBase64 } = jsonBody(ctx);
+      if (typeof audioBase64 !== "string" || audioBase64.length > Math.ceil(maxTranscriptionBytes / 3) * 4 ||
+          audioBase64.length % 4 !== 0 || !/^[A-Za-z0-9+/]+={0,2}$/.test(audioBase64)) {
+        throw new Error("Expected a Base64 WAV in the audio_base64 field");
+      }
+      const padding = audioBase64.endsWith("==") ? 2 : audioBase64.endsWith("=") ? 1 : 0;
+      const size = audioBase64.length / 4 * 3 - padding;
+      if (size <= 44 || size > maxTranscriptionBytes) {
+        throw new Error("Expected WAV audio within the supported size");
+      }
+      return { kind: "submit", model: transcriptionModel, action: "transcribe", requestBody: { audioBase64 } };
+    }
     if (ctx.body.kind !== "multipart" || ctx.body.files.length !== 1) {
       throw new Error("Expected one WAV file in the audio field");
     }
@@ -110,7 +123,7 @@ export function buildSubmitRequest(ctx) {
           input: [{
             type: "audio",
             mime_type: "audio/wav",
-            data: { __fileRef: ctx.requestBody.audioRef, encoding: "base64", maxBytes: maxTranscriptionBytes },
+            data: ctx.requestBody.audioBase64 ?? { __fileRef: ctx.requestBody.audioRef, encoding: "base64", maxBytes: maxTranscriptionBytes },
           }],
           generation_config: {
             transcription_config: { mode: { type: "verbatim", timestamp_granularities: ["word"] } },
