@@ -1,21 +1,24 @@
 const model = "gemini-3.8-flash-lite-tts";
 const replicationModels = ["gemini-3.8-flash-tts", model];
+const transcriptionModel = "gemini-3.5-transcribe";
+const maxTranscriptionBytes = 600 * 24000 * 2 + 44;
 const baseURL = "https://generativelanguage.googleapis.com";
 
 export const meta = {
   apiVersion: 1,
   key: "gemini-voice",
   name: "Gemini 录音复刻",
-  version: "1.0.3",
+  version: "1.0.4",
   author: { name: "Plugin Maintainers" },
   baseUrl: baseURL,
   auth: "api_key",
-  models: replicationModels,
+  models: [...replicationModels, transcriptionModel],
   fetchMode: "per_task",
   routes: [
     { method: "POST", path: "/v1beta/voices", type: "submit", decode: "createVoice", render: "result", retainResult: false },
     { method: "GET", path: "/v1beta/voices", type: "submit", decode: "listVoices", render: "result", retainResult: false },
     { method: "POST", path: "/v1beta/interactions", type: "submit", decode: "synthesize", render: "result", retainResult: false },
+    { method: "POST", path: "/v1beta/transcriptions", type: "submit", decode: "transcribe", render: "result", retainResult: false },
   ],
 };
 
@@ -60,6 +63,16 @@ export const native = {
     }
     return { kind: "submit", model, action: "synthesize", requestBody: body };
   },
+  transcribe(ctx) {
+    if (ctx.body.kind !== "multipart" || ctx.body.files.length !== 1) {
+      throw new Error("Expected one WAV file in the audio field");
+    }
+    const [audio] = ctx.body.files;
+    if (audio.field !== "audio" || audio.mimeType !== "audio/wav" || audio.size <= 44 || audio.size > maxTranscriptionBytes) {
+      throw new Error("Expected WAV audio within the supported size");
+    }
+    return { kind: "submit", model: transcriptionModel, action: "transcribe", requestBody: { audioRef: audio.ref } };
+  },
   result(_ctx, task) {
     return task.data;
   },
@@ -86,6 +99,24 @@ export function buildSubmitRequest(ctx) {
     }
     case "synthesize":
       return { url: baseURL + "/v1beta/interactions", method: "POST", headers, body: ctx.requestBody };
+    case "transcribe":
+      return {
+        url: baseURL + "/v1beta/interactions",
+        method: "POST",
+        headers,
+        body: {
+          model: transcriptionModel,
+          store: false,
+          input: [{
+            type: "audio",
+            mime_type: "audio/wav",
+            data: { __fileRef: ctx.requestBody.audioRef, encoding: "base64", maxBytes: maxTranscriptionBytes },
+          }],
+          generation_config: {
+            transcription_config: { mode: { type: "verbatim", timestamp_granularities: ["word"] } },
+          },
+        },
+      };
     default:
       throw new Error("Unsupported Gemini voice action");
   }
