@@ -2,7 +2,7 @@
 
 计费用量上报以 New API `v1.0.0-rc.51` 为目标。在测试环境用 Root 账号进入任务插件管理，上传并启用 [plugin.js](plugin.js)。
 
-新建专用的 Task Plugin 渠道，绑定 `gemini-voice`，上游地址填 `https://generativelanguage.googleapis.com`。使用同一 Google 项目的 API Key，并为渠道和服务端 Token 开通需要的模型。创建复刻音色、试听和合成使用 `gemini-3.8-flash-lite-tts`，逐词转录使用 `gemini-3.5-transcribe`。
+新建专用的 Task Plugin 渠道，绑定 `gemini-voice`，上游地址填 `https://generativelanguage.googleapis.com`。使用同一 Google 项目的 API Key，并为渠道和服务端 Token 开通需要的模型。创建复刻音色时由调用方传入 `voice.model`，Admin 默认传入 `gemini-3.8-flash-tts`。试听和合成使用 `gemini-3.8-flash-lite-tts`，逐词转录使用 `gemini-3.5-transcribe`。
 
 接入的服务端用 New API Bearer Token 调用以下路径。如果顶层路径被现有路由占用，使用 `/gemini-voice` 前缀并检查插件详情中的 `skipped_routes`。
 
@@ -27,4 +27,4 @@ New API `v1.0.0-rc.49` 实测不接受无请求体的 `GET /v1beta/voices`，业
 
 合成按 8,192 个输入 Token 和 16,384 个输出 Token 预扣。转录按 24 kHz 单声道 16 位 PCM 的文件大小估算时长，再按每秒 25 个音频输入 Token 和每分钟 175 个文本输出 Token 预扣。成功后按 Google 返回的实际用量多退少补，响应缺少有效用量时保留预扣额。
 
-网关使用 `gemini-3.8-flash-lite-tts` 接收创建音色和查询音色列表请求，插件上报零 Token 用量。转发创建请求给 Google 时，插件将 `voice.model` 设置为 `gemini-3.8-flash-tts`。试听和合成仍使用 Flash-Lite。已有按次价格继续按次结算。
+插件原样转发创建请求的 `voice.model`。请为 Admin 使用的复刻模型配置按次定价。使用 Flash-Lite 查询音色列表时，插件上报零 Token 用量。
