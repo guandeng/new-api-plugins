@@ -9,11 +9,19 @@ export const meta = {
   apiVersion: 1,
   key: "gemini-voice",
   name: "Gemini 录音复刻",
-  version: "1.0.10",
+  version: "1.0.11",
   author: { name: "Plugin Maintainers" },
   baseUrl: baseURL,
   auth: "api_key",
-  models: [],
+  models: ["gemini-3.8-flash-tts", model, transcriptionModel],
+  usageProfiles: [{
+    models: [model, transcriptionModel],
+    schema: {
+      input_tokens: { type: "number", unit: "token", description: { en: "Input tokens", zh: "输入 Token" } },
+      output_tokens: { type: "number", unit: "token", description: { en: "Output tokens", zh: "输出 Token" } },
+    },
+    examples: [{ label: "Token 用量示例", facts: { input_tokens: 100, output_tokens: 500 } }],
+  }],
   fetchMode: "per_task",
   routes: [
     { method: "POST", path: "/v1beta/voices", type: "submit", decode: "createVoice", render: "result", retainResult: false },
