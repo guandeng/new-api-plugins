@@ -1,4 +1,5 @@
 const model = "gemini-3.8-flash-lite-tts";
+const flashModel = "gemini-3.8-flash-tts";
 const transcriptionModel = "gemini-3.5-transcribe";
 const wavHeaderBytes = 44;
 const wavBytesPerSecond = 24000 * 2;
@@ -9,18 +10,21 @@ export const meta = {
   apiVersion: 1,
   key: "gemini-voice",
   name: "Gemini 录音复刻",
-  version: "1.0.11",
+  version: "1.0.14",
   author: { name: "Plugin Maintainers" },
   baseUrl: baseURL,
   auth: "api_key",
-  models: ["gemini-3.8-flash-tts", model, transcriptionModel],
+  models: [flashModel, model, transcriptionModel],
   usageProfiles: [{
-    models: [model, transcriptionModel],
+    models: [model, transcriptionModel, "gemini-3.8-flash-tts"],
     schema: {
       input_tokens: { type: "number", unit: "token", description: { en: "Input tokens", zh: "输入 Token" } },
       output_tokens: { type: "number", unit: "token", description: { en: "Output tokens", zh: "输出 Token" } },
     },
-    examples: [{ label: "Token 用量示例", facts: { input_tokens: 100, output_tokens: 500 } }],
+    examples: [
+      { label: "合成和转录用量示例", facts: { input_tokens: 100, output_tokens: 500 } },
+      { label: "音色复刻", facts: { input_tokens: 0, output_tokens: 0 } },
+    ],
   }],
   fetchMode: "per_task",
   routes: [
@@ -156,8 +160,12 @@ export function extractUsage(ctx) {
   if (ctx.usagePurpose === "billing_ratios") return null;
   switch (ctx.action) {
     case "create-voice":
-    case "list-voices":
-      return ctx.model === model || ctx.upstreamModel === model ? { input_tokens: 0, output_tokens: 0 } : null;
+    case "list-voices": {
+      const usesLite = ctx.model === model || ctx.upstreamModel === model;
+      const usesFlashForReplication = ctx.action === "create-voice" &&
+        (ctx.model === flashModel || ctx.upstreamModel === flashModel);
+      return usesLite || usesFlashForReplication ? { input_tokens: 0, output_tokens: 0 } : null;
+    }
     case "synthesize":
       // 请求没有可靠的输出长度，按 Flash-Lite TTS 的输入、输出上限预扣。
       return { input_tokens: 8192, output_tokens: 16384 };
