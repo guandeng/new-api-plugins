@@ -10,7 +10,7 @@ export const meta = {
   apiVersion: 1,
   key: "gemini-voice",
   name: "Gemini 录音复刻",
-  version: "1.0.6",
+  version: "1.0.7",
   author: { name: "Plugin Maintainers" },
   baseUrl: baseURL,
   auth: "api_key",
@@ -156,6 +156,9 @@ export function parseSubmitResponse(ctx, response) {
 export function extractUsage(ctx) {
   if (ctx.usagePurpose === "billing_ratios") return null;
   switch (ctx.action) {
+    case "create-voice":
+    case "list-voices":
+      return ctx.model === model || ctx.upstreamModel === model ? { input_tokens: 0, output_tokens: 0 } : null;
     case "synthesize":
       // 请求没有可靠的输出长度，按 Flash-Lite TTS 的输入、输出上限预扣。
       return { input_tokens: 8192, output_tokens: 16384 };
