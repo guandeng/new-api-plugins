@@ -27,4 +27,4 @@ New API `v1.0.0-rc.49` 实测不接受无请求体的 `GET /v1beta/voices`，业
 
 合成按 8,192 个输入 Token 和 16,384 个输出 Token 预扣。转录按 24 kHz 单声道 16 位 PCM 的文件大小估算时长，再按每秒 25 个音频输入 Token 和每分钟 175 个文本输出 Token 预扣。成功后按 Google 返回的实际用量多退少补，响应缺少有效用量时保留预扣额。
 
-插件原样转发创建请求的 `voice.model`。请为 Admin 使用的复刻模型配置按次定价。使用 Flash-Lite 查询音色列表时，插件上报零 Token 用量。
+插件原样转发创建请求的 `voice.model`。Flash 复刻可以按次计价；如果使用 Token 表达式，插件上报零合成 Token。使用 Flash-Lite 查询音色列表时，插件上报零 Token 用量。
