@@ -1,18 +1,28 @@
 const model = "gemini-3.8-flash-lite-tts";
 const replicationModels = ["gemini-3.8-flash-tts", model];
 const transcriptionModel = "gemini-3.5-transcribe";
-const maxTranscriptionBytes = 600 * 24000 * 2 + 44;
+const wavHeaderBytes = 44;
+const wavBytesPerSecond = 24000 * 2;
+const maxTranscriptionBytes = 600 * wavBytesPerSecond + wavHeaderBytes;
 const baseURL = "https://generativelanguage.googleapis.com";
 
 export const meta = {
   apiVersion: 1,
   key: "gemini-voice",
   name: "Gemini 录音复刻",
-  version: "1.0.5",
+  version: "1.0.6",
   author: { name: "Plugin Maintainers" },
   baseUrl: baseURL,
   auth: "api_key",
   models: [...replicationModels, transcriptionModel],
+  usageProfiles: [{
+    models: [model, transcriptionModel],
+    schema: {
+      input_tokens: { type: "number", unit: "token", description: { en: "Input tokens", zh: "输入 Token" } },
+      output_tokens: { type: "number", unit: "token", description: { en: "Output tokens", zh: "输出 Token" } },
+    },
+    examples: [{ label: "Token 用量示例", facts: { input_tokens: 100, output_tokens: 500 } }],
+  }],
   fetchMode: "per_task",
   routes: [
     { method: "POST", path: "/v1beta/voices", type: "submit", decode: "createVoice", render: "result", retainResult: false },
@@ -72,19 +82,19 @@ export const native = {
       }
       const padding = audioBase64.endsWith("==") ? 2 : audioBase64.endsWith("=") ? 1 : 0;
       const size = audioBase64.length / 4 * 3 - padding;
-      if (size <= 44 || size > maxTranscriptionBytes) {
+      if (size <= wavHeaderBytes || size > maxTranscriptionBytes) {
         throw new Error("Expected WAV audio within the supported size");
       }
-      return { kind: "submit", model: transcriptionModel, action: "transcribe", requestBody: { audioBase64 } };
+      return { kind: "submit", model: transcriptionModel, action: "transcribe", requestBody: { audioBase64, audioBytes: size } };
     }
     if (ctx.body.kind !== "multipart" || ctx.body.files.length !== 1) {
       throw new Error("Expected one WAV file in the audio field");
     }
     const [audio] = ctx.body.files;
-    if (audio.field !== "audio" || audio.mimeType !== "audio/wav" || audio.size <= 44 || audio.size > maxTranscriptionBytes) {
+    if (audio.field !== "audio" || audio.mimeType !== "audio/wav" || audio.size <= wavHeaderBytes || audio.size > maxTranscriptionBytes) {
       throw new Error("Expected WAV audio within the supported size");
     }
-    return { kind: "submit", model: transcriptionModel, action: "transcribe", requestBody: { audioRef: audio.ref } };
+    return { kind: "submit", model: transcriptionModel, action: "transcribe", requestBody: { audioRef: audio.ref, audioBytes: audio.size } };
   },
   result(_ctx, task) {
     return task.data;
@@ -141,6 +151,33 @@ export function parseSubmitResponse(ctx, response) {
     taskData: response.body,
     immediate: { status: "SUCCESS", progress: "100%" },
   };
+}
+
+export function extractUsage(ctx) {
+  if (ctx.usagePurpose === "billing_ratios") return null;
+  switch (ctx.action) {
+    case "synthesize":
+      // 请求没有可靠的输出长度，按 Flash-Lite TTS 的输入、输出上限预扣。
+      return { input_tokens: 8192, output_tokens: 16384 };
+    case "transcribe": {
+      // 用 24 kHz、单声道、16 位 PCM 的文件大小估算，实际扣费取上游用量。
+      const seconds = (ctx.requestBody.audioBytes - wavHeaderBytes) / wavBytesPerSecond;
+      return { input_tokens: Math.ceil(seconds * 25), output_tokens: Math.ceil(seconds * 175 / 60) };
+    }
+    default:
+      return null;
+  }
+}
+
+export function extractUsageOnComplete(ctx, _result, body) {
+  if (ctx.action !== "synthesize" && ctx.action !== "transcribe") return null;
+  const input = body?.usage?.total_input_tokens;
+  const output = body?.usage?.total_output_tokens;
+  const thought = body?.usage?.total_thought_tokens ?? 0;
+  if (![input, output, thought, output + thought].every((count) => Number.isSafeInteger(count) && count >= 0)) {
+    throw new Error("Gemini response token usage is missing or invalid");
+  }
+  return { input_tokens: input, output_tokens: output + thought };
 }
 
 export function buildQueryRequest() {
