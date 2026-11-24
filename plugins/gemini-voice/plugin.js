@@ -1,5 +1,6 @@
 const model = "gemini-3.8-flash-lite-tts";
-const replicationModels = ["gemini-3.8-flash-tts", model];
+const replicationModel = "gemini-3.8-flash-tts";
+const replicationModels = [replicationModel, model];
 const transcriptionModel = "gemini-3.5-transcribe";
 const wavHeaderBytes = 44;
 const wavBytesPerSecond = 24000 * 2;
@@ -10,7 +11,7 @@ export const meta = {
   apiVersion: 1,
   key: "gemini-voice",
   name: "Gemini 录音复刻",
-  version: "1.0.7",
+  version: "1.0.8",
   author: { name: "Plugin Maintainers" },
   baseUrl: baseURL,
   auth: "api_key",
@@ -110,8 +111,14 @@ export const native = {
 export function buildSubmitRequest(ctx) {
   const headers = { "x-goog-api-key": ctx.apiKey, Accept: "application/json", "Content-Type": "application/json" };
   switch (ctx.action) {
-    case "create-voice":
-      return { url: baseURL + "/v1beta/voices", method: "POST", headers, body: ctx.requestBody };
+    case "create-voice": {
+      const { requestBody } = ctx;
+      // Lite 用于网关计价，Google 的音色创建请求使用 Flash TTS。
+      const body = requestBody.voice?.model === model
+        ? { ...requestBody, voice: { ...requestBody.voice, model: replicationModel } }
+        : requestBody;
+      return { url: baseURL + "/v1beta/voices", method: "POST", headers, body };
+    }
     case "list-voices": {
       let query = "type=replicated";
       for (const name of ["pageSize", "pageToken"]) {

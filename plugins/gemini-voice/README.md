@@ -27,4 +27,4 @@ New API `v1.0.0-rc.49` 实测不接受无请求体的 `GET /v1beta/voices`，业
 
 合成按 8,192 个输入 Token 和 16,384 个输出 Token 预扣。转录按 24 kHz 单声道 16 位 PCM 的文件大小估算时长，再按每秒 25 个音频输入 Token 和每分钟 175 个文本输出 Token 预扣。成功后按 Google 返回的实际用量多退少补，响应缺少有效用量时保留预扣额。
 
-使用 `gemini-3.8-flash-lite-tts` 创建复刻音色或查询音色列表时，插件上报零 Token 用量。已有按次价格继续按次结算。
+网关使用 `gemini-3.8-flash-lite-tts` 接收创建音色和查询音色列表请求，插件上报零 Token 用量。转发创建请求给 Google 时，插件将 `voice.model` 设置为 `gemini-3.8-flash-tts`。试听和合成仍使用 Flash-Lite。已有按次价格继续按次结算。
